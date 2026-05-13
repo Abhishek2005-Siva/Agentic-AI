@@ -1,0 +1,50 @@
+# Environment & secrets
+.env
+*.env
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# Virtual environment
+venv/
+env/
+.venv/
+
+# Local database
+.sec_data.db
+*.db
+
+# IDE / OS
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Generated / scratch docs
+ARCHITECTURE.md
+BUILD_COMPLETE.md
+BUILD_SUMMARY.md
+DEPLOYMENT_CHECKLIST.md
+INDEX.md
+PROJECT_SUMMARY.md
+QUICKSTART.md
+QUICK_REFERENCE.md
+SETUP.md
+START_HERE.md
+START_WORKFLOW.md
+SYSTEM_OVERVIEW.txt
+WORKFLOW_GUIDE.md
