@@ -1,5 +1,10 @@
 # SEC Intelligence Platform
 
+**Live site:** [agentic-ai-eight-alpha.vercel.app](https://agentic-ai-eight-alpha.vercel.app) · **Source:** [`/web`](web)
+
+> The live site is a Vite + React landing page that explains the project. The application itself runs locally, so follow the setup steps below to try it.
+
+
 An autonomous financial intelligence system that queries SEC EDGAR in real time, extracts structured events and entities from filings, and answers natural-language questions through a multi-tool agentic loop powered by OpenAI function-calling.
 
 ---
