@@ -4,8 +4,9 @@ Run:  streamlit run streamlit_app.py
 
 Same agent as the Gradio app (app.py): the planner in sec_intelligence.agent
 drives an OpenAI function-calling loop over live SEC EDGAR tools. Visitors paste
-their own OpenAI key in the sidebar; it is kept in their session only.
+their own OpenAI or NVIDIA (free) key in the sidebar; it is kept in their session only.
 """
+import os
 import threading
 
 import streamlit as st
@@ -16,6 +17,20 @@ st.set_page_config(page_title="SEC Intelligence Agent", page_icon="📈", layout
 # visitor's key from ever being used for another visitor's request, every agent
 # step runs while holding this lock, with the key set just before it runs.
 _AGENT_LOCK = threading.Lock()
+
+# Both providers speak the OpenAI API. NVIDIA's free hosted models just use another base URL.
+PROVIDERS = {
+    "NVIDIA (free)": {
+        "base_url": "https://integrate.api.nvidia.com/v1",
+        "models": ["nvidia/nemotron-3-super-120b-a12b", "mistralai/mistral-large-2-instruct", "openai/gpt-oss-20b"],
+        "hint": "nvapi-…  (free key at build.nvidia.com)",
+    },
+    "OpenAI": {
+        "base_url": None,
+        "models": ["gpt-4o-mini", "gpt-4o", "gpt-4.1-mini"],
+        "hint": "sk-…",
+    },
+}
 
 EXAMPLES = [
     "What were Apple's most recent 10-K risk factors about supply chain?",
@@ -77,7 +92,7 @@ def _render_trace(agent: dict) -> None:
             st.code(detail, language="text")
 
 
-def _run_steps(api_key: str, placeholder) -> None:
+def _run_steps(llm: dict, placeholder) -> None:
     """Run one step (step mode) or all remaining steps, streaming into placeholder."""
     from sec_intelligence.agent.planner import run_one_step
     from sec_intelligence.config import get_config
@@ -87,7 +102,14 @@ def _run_steps(api_key: str, placeholder) -> None:
     st.session_state.run_mode = None
 
     with _AGENT_LOCK:
-        get_config().llm.llm_api_key = api_key
+        cfg = get_config().llm
+        saved = (cfg.llm_api_key, cfg.llm_model_name, os.environ.get("OPENAI_BASE_URL"))
+        cfg.llm_api_key, cfg.llm_model_name = llm["api_key"], llm["model"]
+        # The agent builds OpenAI(api_key=...) clients itself; the SDK picks the endpoint up from here.
+        if llm["base_url"]:
+            os.environ["OPENAI_BASE_URL"] = llm["base_url"]
+        else:
+            os.environ.pop("OPENAI_BASE_URL", None)
         try:
             while not agent.get("done"):
                 for agent, display, _ in run_one_step(agent):
@@ -96,7 +118,11 @@ def _run_steps(api_key: str, placeholder) -> None:
                 if step_by_step:
                     break
         finally:
-            get_config().llm.llm_api_key = None
+            cfg.llm_api_key, cfg.llm_model_name = saved[0], saved[1]
+            if saved[2] is None:
+                os.environ.pop("OPENAI_BASE_URL", None)
+            else:
+                os.environ["OPENAI_BASE_URL"] = saved[2]
     st.session_state.agent = agent
 
 
@@ -106,12 +132,16 @@ def main() -> None:
     with st.sidebar:
         st.title("📈 SEC Intelligence")
         st.caption("An agent that searches SEC EDGAR live and answers in plain language.")
+        provider = st.selectbox("LLM provider", list(PROVIDERS))
+        settings = PROVIDERS[provider]
         api_key = st.text_input(
-            "OpenAI API key",
+            "API key",
             type="password",
-            placeholder="sk-…",
+            placeholder=settings["hint"],
             help="Used only for your requests in this browser session. Never stored.",
         )
+        model = st.selectbox("Model", settings["models"])
+        llm = {"api_key": api_key, "model": model, "base_url": settings["base_url"]}
         auto = st.toggle("Run all steps automatically", value=True)
         st.button("Clear conversation", on_click=_reset, width="stretch")
         st.divider()
@@ -140,7 +170,7 @@ def main() -> None:
 
     if question:
         if not api_key:
-            st.warning("Paste your OpenAI API key in the sidebar first.")
+            st.warning("Paste your API key (OpenAI or NVIDIA) in the sidebar first.")
             st.stop()
         from sec_intelligence.agent.planner import init_agent_state
 
@@ -154,12 +184,12 @@ def main() -> None:
     if agent and not agent.get("done"):
         if st.session_state.run_mode:
             if not api_key:
-                st.warning("Paste your OpenAI API key in the sidebar to continue.")
+                st.warning("Paste your API key in the sidebar to continue.")
                 st.stop()
             with st.chat_message("assistant"):
                 placeholder = st.empty()
                 placeholder.markdown("🤔 Working…")
-                _run_steps(api_key, placeholder)
+                _run_steps(llm, placeholder)
             st.rerun()
         else:
             cols = st.columns(3)
