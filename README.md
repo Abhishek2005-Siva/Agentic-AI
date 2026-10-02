@@ -9,6 +9,17 @@ An autonomous financial intelligence system that queries SEC EDGAR in real time,
 
 ---
 
+## Streamlit app
+
+A Streamlit version of the Gradio UI. Paste your OpenAI key in the sidebar; it is kept in your session only. The Gradio app (`app.py`) is unchanged.
+
+```bash
+pip install -r requirements.txt
+streamlit run streamlit_app.py
+```
+
+**Deploy on Streamlit Community Cloud:** at [share.streamlit.io](https://share.streamlit.io) choose this repo, branch `main` and main file `streamlit_app.py`.
+
 ## Table of Contents
 
 1. [What It Does](#1-what-it-does)
