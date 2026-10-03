@@ -9,6 +9,9 @@ their own OpenAI or NVIDIA (free) key in the sidebar; it is kept in their sessio
 import os
 import threading
 
+import json
+import re
+import urllib.request
 import streamlit as st
 
 st.set_page_config(page_title="SEC Intelligence Agent", page_icon="📈", layout="wide")
@@ -22,7 +25,7 @@ _AGENT_LOCK = threading.Lock()
 PROVIDERS = {
     "NVIDIA (free)": {
         "base_url": "https://integrate.api.nvidia.com/v1",
-        "models": ["nvidia/nemotron-3-super-120b-a12b", "mistralai/mistral-large-2-instruct", "openai/gpt-oss-20b"],
+        "models": [],  # filled live by nvidia_models()
         "hint": "nvapi-…  (free key at build.nvidia.com)",
     },
     "OpenAI": {
@@ -31,6 +34,36 @@ PROVIDERS = {
         "hint": "sk-…",
     },
 }
+
+# NVIDIA's hosted lineup changes often (models get retired without notice), so read the live list.
+NVIDIA_MODELS_URL = "https://integrate.api.nvidia.com/v1/models"
+_NON_CHAT = re.compile(
+    r"embed|rerank|safety|guard|reward|parse|vlm|vision|clip|retriev|riva|neva|vila|kosmos|"
+    r"deplot|fuyu|video|cosmos|ising|starcoder", re.I)
+_PREFERRED = [
+    "mistralai/mistral-large-2-instruct",
+    "nvidia/llama-3.1-nemotron-70b-instruct",
+    "nvidia/nemotron-nano-3-30b-a3b",
+    "openai/gpt-oss-20b",
+]
+
+
+@st.cache_data(ttl=1800, show_spinner=False)
+def nvidia_models() -> list[str]:
+    """Chat models NVIDIA is serving right now, preferred ones first. Falls back to a short list."""
+    try:
+        with urllib.request.urlopen(NVIDIA_MODELS_URL, timeout=8) as resp:
+            ids = [m["id"] for m in json.load(resp)["data"]]
+        chat = [i for i in ids if not _NON_CHAT.search(i)]
+        first = [m for m in _PREFERRED if m in chat]
+        return (first + [i for i in chat if i not in first]) or list(_PREFERRED)
+    except Exception:  # noqa: BLE001 - offline or endpoint changed
+        return list(_PREFERRED)
+
+
+def models_for(provider: str) -> list[str]:
+    return nvidia_models() if provider.startswith("NVIDIA") else PROVIDERS[provider]["models"]
+
 
 EXAMPLES = [
     "What were Apple's most recent 10-K risk factors about supply chain?",
@@ -140,7 +173,7 @@ def main() -> None:
             placeholder=settings["hint"],
             help="Used only for your requests in this browser session. Never stored.",
         )
-        model = st.selectbox("Model", settings["models"])
+        model = st.selectbox("Model", models_for(provider))
         llm = {"api_key": api_key, "model": model, "base_url": settings["base_url"]}
         auto = st.toggle("Run all steps automatically", value=True)
         st.button("Clear conversation", on_click=_reset, width="stretch")
