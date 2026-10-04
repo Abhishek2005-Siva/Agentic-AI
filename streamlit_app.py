@@ -7,12 +7,17 @@ drives an OpenAI function-calling loop over live SEC EDGAR tools. Visitors paste
 their own OpenAI or NVIDIA (free) key in the sidebar; it is kept in their session only.
 """
 import os
+import sys
 import threading
+from pathlib import Path
 
 import json
 import re
 import urllib.request
 import streamlit as st
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))  # nvidia_picker.py lives next to this file
+from nvidia_picker import apply_pending_model, render_model_picker  # noqa: E402
 
 st.set_page_config(page_title="SEC Intelligence Agent", page_icon="📈", layout="wide")
 
@@ -161,6 +166,7 @@ def _run_steps(llm: dict, placeholder) -> None:
 
 def main() -> None:
     _init_session()
+    apply_pending_model("model_sel_NVIDIA (free)")
 
     with st.sidebar:
         st.title("📈 SEC Intelligence")
@@ -173,7 +179,10 @@ def main() -> None:
             placeholder=settings["hint"],
             help="Used only for your requests in this browser session. Never stored.",
         )
-        model = st.selectbox("Model", models_for(provider))
+        model = st.selectbox("Model", models_for(provider), key=f"model_sel_{provider}")
+        if provider.startswith("NVIDIA"):
+            # an agent needs a model that can call tools, so the picker checks for that
+            render_model_picker(api_key, models_for(provider), with_tools=True)
         llm = {"api_key": api_key, "model": model, "base_url": settings["base_url"]}
         auto = st.toggle("Run all steps automatically", value=True)
         st.button("Clear conversation", on_click=_reset, width="stretch")
